@@ -1,0 +1,115 @@
+{
+  "name": "postgresql-sink-connector",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
+    "tasks.max": "1",
+    "topics": "cdc_users",
+    "connection.url": "jdbc:postgresql://mytimescale:5432/mydb?schema=public&user=admin&password=adminpass",
+    "auto.create": "false",
+    "auto.evolve": "false",
+    "insert.mode": "upsert",
+    "delete.enabled": "true",
+    "pk.fields": "id",
+    "pk.mode": "record_key",
+    "transforms": "mongoflatten,ReplaceField,dropPrefix",
+    "transforms.dropPrefix.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.dropPrefix.regex": "cdc_(.*)",
+    "transforms.dropPrefix.replacement": "user",
+    "transforms.mongoflatten.type": "io.debezium.connector.mongodb.transforms.ExtractNewDocumentState",
+    "transforms.mongoflatten.drop.tombstones": "false",
+    "transforms.ReplaceField.type": "org.apache.kafka.connect.transforms.ReplaceField$Value",
+    "transforms.ReplaceField.include": "id,name,full_name,country,gender,level,avatar,audience_type,updated_at,created_at"
+  }
+}
+
+
+{
+    "name": "postgresql-sink-connector-mod",
+    "config": {
+        "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+        "tasks.max": "1",
+        "database.hostname": "mytimescale",
+        "database.port": "5432",
+        "database.user": "admin",
+        "database.password": "admin",
+        "database.dbname": "mydb",
+        "database.server.name": "mytimescale",
+        "database.schema": "public",
+        "topics": "moderators",
+        "topic.prefix": "cdc_",
+        "connection.url": "jdbc:postgresql://mytimescale:5432/mydb?schema=public&user=admin&password=admin&stringtype=unspecified",
+        "auto.create": "false",
+        "auto.evolve": "false",
+        "insert.mode": "upsert",
+        "delete.enabled": "false",
+        "pk.fields": "id",
+        "pk.mode": "record_key",
+        "transforms": "mongoflatten,ReplaceField,dropPrefix",
+        "transforms.dropPrefix.type": "org.apache.kafka.connect.transforms.RegexRouter",
+        "transforms.dropPrefix.regex": "cdc_(.*)",
+        "transforms.dropPrefix.replacement": "$1",
+        "transforms.mongoflatten.type": "io.debezium.connector.mongodb.transforms.ExtractNewDocumentState",
+        "transforms.mongoflatten.drop.tombstones": "false",
+        "transforms.ReplaceField.type": "org.apache.kafka.connect.transforms.ReplaceField$Value",
+        "transforms.ReplaceField.include": "id,name,full_name,country,gender,level,avatar,status,updated_at,created_at,hash_tags,total_stars,vote_count,official,fake_vote_count"
+    }
+}
+
+
+add postgresql sink
+curl -i -X POST -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:8083/connectors/ -d @mod-sink.json
+
+add mongodb source
+curl -i -X POST -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:8083/connectors/ -d @mod-source.json
+
+curl -i -X DELETE -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:8083/connectors/postgresql-sink-connector -d @mod-sink.json
+
+rm mongodb source
+curl -i -X DELETE -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:8083/connectors/mongodb-source-connector-mod -d @mod-source.json
+
+
+
+
+
+// Example
+rm postgresql sink
+curl -i -X DELETE -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:9083/connectors/postgresql-sink-connector -d @jdbc-sink.json
+
+rm mongodb source
+curl -i -X DELETE -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:9083/connectors/mongodb-source-connector -d @mongodb-source.json
+
+
+// API moderators
+curl -i -X DELETE -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:9083/connectors/postgresql-sink-connector-mod -d @jdbc-sink-moderator.json
+curl -i -X DELETE -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:9083/connectors/mongodb-source-connector-mod -d @mongodb-source-moderator.json
+curl -i -X POST -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:9083/connectors/ -d @jdbc-sink-moderator.json
+curl -i -X POST -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:9083/connectors/ -d @mongodb-source-moderator.json
+
+curl -i -X GET -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:9083/connectors/
+
+curl -i -X GET -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:9083/connectors/postgresql-sink-connector-mod/tasks
+curl -i -X GET -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:9083/connectors/postgresql-sink-connector-mod/tasks/0/status
+
+curl -i -X POST -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:9083/connectors/mod-source.json
+
+curl -i -X POST -H "Accept:application/json" -H  "Content-Type:application/json" http://localhost:9083/connectors/postgresql-sink-connector-mod/restart
+
+// Add vào signal
+{
+    "type" : "execute-snapshot", 
+    "data" : {
+        "data-collections" : [
+            "bitu-backend.users",
+            "bitu-backend.moderators",
+        ]
+    }
+}
+
+//
+1076  chown
+1077  sudo chown -r 1000:1000 kafka/
+1078  sudo chown -R 1000:1000 kafka/
+1079  sudo chown -R 1000:1000 zookeeper/
+1996  history | grep chown
+
+ALTER TABLE users ADD COLUMN country character varying(2) NULL DEFAULT NULL;
